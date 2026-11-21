@@ -1,0 +1,30 @@
+:root {
+  /* colori */
+  --sfondo: #0e0c0b;
+  --testo: #efe7da;
+  --libro: #efe7da;
+  --tavola: #fafafa;
+
+  /* testo */
+  --font: "Courier New", Arial, sans-serif;
+  --testo-dimensione: 12px;
+
+  /* libri e scaffali (in pixel) */
+  --libro-larghezza: 7px;
+  --libro-spazio: 2px;
+  --libro-altezza: 48px;
+  --tavola-spessore: 4px;
+  --scaffale-spazio: 22px;
+  --margine: 40px;
+  --etichetta-larghezza: 190px;
+}
+
+body {
+  margin: 0;
+  overflow-x: hidden;
+  background: var(--sfondo);
+}
+
+canvas {
+  display: block;
+}
