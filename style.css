@@ -5,6 +5,9 @@
   --libro: #efe7da;
   --tavola: #fafafa;
 
+  /* introduzione */
+  --font-intro: "Courier New", Courier, monospace;
+
   /* testo */
   --font: "Courier New", Arial, sans-serif;
   --testo-dimensione: 12px;
@@ -17,6 +20,39 @@
   --scaffale-spazio: 22px;
   --margine: 40px;
   --etichetta-larghezza: 190px;
+}
+
+
+/* Introduzione*/
+#intro {
+  position: fixed;
+  inset: 0; 
+  z-index: 10; 
+}
+
+.intro-page {
+  position: absolute;
+  inset: 0;
+  z-index: var(--ordine);
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+
+  background: var(--sfondo);
+  color: var(--testo);
+  font-family: var(--font-intro);
+}
+
+.intro-page h1 {
+  font-size: 80px;
+  margin-bottom: 10px;
+}
+
+.intro-sottotitolo,
+.intro-testo {
+  font-size: 20px;
 }
 
 body {
