@@ -1,18 +1,19 @@
 :root {
   /* colori */
-  --sfondo: #0e0c0b;
+  --sfondo: #594734;
   --testo: #efe7da;
   --libro: #efe7da;
   --tavola: #fafafa;
 
   /* introduzione */
   --font-intro: "Courier New", Courier, monospace;
+  --sfondo-intro: #31261a;
 
   /* testo */
   --font: "Courier New", Arial, sans-serif;
   --testo-dimensione: 12px;
 
-  /* libri e scaffali (in pixel) */
+  /* libri e scaffali  */
   --libro-larghezza: 7px;
   --libro-spazio: 2px;
   --libro-altezza: 48px;
@@ -40,7 +41,7 @@
   justify-content: center;
   align-items: center;
 
-  background: var(--sfondo);
+  background: var(--sfondo-intro);
   color: var(--testo);
   font-family: var(--font-intro);
 }
@@ -78,4 +79,8 @@ body {
 
 canvas {
   display: block;
+}
+
+.via { 
+  display: none;
 }

@@ -19,10 +19,6 @@ console.log("Reason Categories:", reasoncategories); //mostra in console le cate
 
 let counts = {}; // Quanti libri ha ogni motivazione
 
-// elementi stile messi in style.css che veongono poi letti da loadStyle
-let margin, labelWidth, bookWidth, bookGap, bookHeight, shelfHeight, shelfGap, shelfStep, labelSize;
-let backgroundColor, textColor, bookColor, shelfColor, fontFamily;
-
 
 async function setup() {
   loadStyle(); //carica gli elementi di stile da style.css

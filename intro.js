@@ -1,5 +1,9 @@
 // Tempo attesa tra una lettera e l'altra (millisecondi)
 let introVelocita = 80;
+let introPagine = document.querySelectorAll(".intro-page"); // tutte le pagine, nell'ordine dell'HTML
+let introCorrente = 0;     // numero della pagina visibile (0 = titolo)
+let introPronto = false;   // diventa true quando titolo e sottotitolo hanno finito di scriversi
+
 
 // Ferma la sequenza per un certo numero di millisecondi
 function introAspetta(ms) {
@@ -33,6 +37,27 @@ async function introAvvia() {
   await introScrivi(titolo, testoTitolo); //attende 800 ms e scrive il titolo
   await introAspetta(500);
   await introScrivi(sottotitolo, testoSottotitolo); //attende 500 ms e scrive il sottotitolo
+  // 1) legge dall'HTML i testi  2)svuota gli elementi 3)li scrive in sequenza
+
+  introPronto = true; // da ora il clic fa avanzare
+
 }
-// 1) legge dall'HTML i testi  2)svuota gli elementi 3)li scrive in sequenza
+
+// Passare alla pagina successiva
+function introAvanti() {
+  if (!introPronto) {
+    return; // sta ancora scrivendo: ignora il clic
+  }
+
+  if (introCorrente < introPagine.length - 1) {
+    introPagine[introCorrente].classList.add("via"); // nasconde la pagina attuale: sotto c'è la successiva
+    introCorrente = introCorrente + 1;
+  } else {
+    document.getElementById("intro").style.display = "none"; // ultima pagina: chiude l'intro
+  }
+}
+
+// Un clic in un punto qualsiasi dell'intro fa avanzare
+document.getElementById("intro").addEventListener("click", introAvanti);
+
 introAvvia();
