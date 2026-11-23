@@ -80,7 +80,8 @@ async function setup() {
     rows.push({
       id: data.getString(row, "book_id"),
       reasons: reasons,
-      state: (data.getString(row, "state_or_province") || "").trim()
+      state: (data.getString(row, "state_or_province") || "").trim(),
+      year: year //serve alla linea del tempo
     });
   }
 
@@ -103,6 +104,7 @@ function buildLibreriaMotivazioni(){
   let bookReasonsById = new Map();
 
   for (let r of rows) {
+    if (r.year > annoSelezionato) continue; //linea del tempo: solo fino all'anno scelto
     if (r.reasons.length === 0) continue; //i libri senza motivazione non contano
     if (!bookReasonsById.has(r.id)) bookReasonsById.set(r.id, new Set()); //crea un nuovo set
     for (let reason of r.reasons) bookReasonsById.get(r.id).add(reason);
@@ -126,6 +128,7 @@ function buildLibreriaMotivazioni(){
 function buildLibreriaStati(){
   let booksByState = new Map(); // stato -> insieme di book_id
   for (let r of rows) {
+    if (r.year > annoSelezionato) continue; //linea del tempo: solo fino all'anno scelto
     if (r.state === "") continue;
     if (!booksByState.has(r.state)) booksByState.set(r.state, new Set());
     booksByState.get(r.state).add(r.id);
@@ -154,6 +157,7 @@ function draw() {
 
   drawIntestazione();
   drawLibreria();
+  drawTimeline(); 
 
   cursor(hoveredId !== null ? HAND : ARROW); //compare la mano quando puoi cliccare
 }
@@ -374,6 +378,12 @@ function loadStyle() {
 }
 
 function mousePressed() {
+
+  if (sopraTimeline()) {
+    updateTimeline();
+    return;
+  }
+
   if (hoveredId === null) return; // se si clicca fuori dagli scaffali non succede nulla
 
   //nuovo URL
@@ -382,4 +392,9 @@ function mousePressed() {
   console.log(newURL);
 
   window.location.href = newURL;
+}
+
+function mouseWheel(event) {
+  scrollTimeline(event.delta);
+  return false; //la pagina non scorre
 }
