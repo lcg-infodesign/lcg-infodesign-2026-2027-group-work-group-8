@@ -45,12 +45,25 @@ let hoveredId = null;
 //stato della pagina
 let rows = [];                  //una voce per ogni riga valida del CSV {id, reasons, state}
 let shelves = [];               //gli scaffali da disegnare {key, label, count}
-let activeSort = "MOTIVAZIONE"; //bottone selezionato
+let ordina = "MOTIVAZIONE"; //bottone selezionato
 let sortButtons = [];           //rettangoli dei pulsanti da cliccare
 const VISIBLE_SHELVES = 10;     //altezza di uno scaffale è sempre altezza libreria / 10
 let scrollY = 0;                //scorrimento verticale della libreria
 let shelfScroll = {};           //scorrimento orizzontale di ogni scaffale {chiave: pixel}
 let labelZone = null;           //spazio a destra per i nomi
+
+//LINEA DEL TEMPO 
+let annoInizio = 2000;
+let annoFine = 2026;
+let annoSelezionato = 2026; //all'apertura si vedono tutti i libri
+let ruota = 2026;           //anno che sta davanti all'anello in questo momento (con la virgola durante l'animazione)
+
+let passo = 0.30;           //distanza tra un anno e l'altro sul cerchio (in radianti): più è grande, più sono distanti
+let scrollAccumulo = 0;     //serve per scorrere 
+
+//cerchio e anello aggiornati ogni frame da drawTimeline
+let tlCx, tlCy, tlR; //tl = timeline
+let xAnello;
 
 
 async function setup() {
@@ -76,7 +89,7 @@ async function setup() {
       .filter((r) => r !== ""); //scarta gli elementi vuoti
     //if (reasons.length === 0) continue; //se dopo la pulizia non resta nessuna motivazione, la riga ha la categoria vuota e viene saltata
 
-    // aggiungo le motivazioni e lo stao
+    // aggiungo le motivazioni e lo stato
     rows.push({
       id: data.getString(row, "book_id"),
       reasons: reasons,
@@ -91,62 +104,6 @@ async function setup() {
   textFont(fontFamily);
 }
 
-function buildScaffali(){
-  scrollY = 0;
-  shelfScroll = {};
-  labelZone = null;
-  if (activeSort === "STATO AMERICANO") buildLibreriaStati();
-  else buildLibreriaMotivazioni();
-}
-
-function buildLibreriaMotivazioni(){
-  // book_id -> insieme di tutte le motivazioni di quel libro (su tutte le sue righe)
-  let bookReasonsById = new Map();
-
-  for (let r of rows) {
-    if (r.year > annoSelezionato) continue; //linea del tempo: solo fino all'anno scelto
-    if (r.reasons.length === 0) continue; //i libri senza motivazione non contano
-    if (!bookReasonsById.has(r.id)) bookReasonsById.set(r.id, new Set()); //crea un nuovo set
-    for (let reason of r.reasons) bookReasonsById.get(r.id).add(reason);
-  }
-
-  // Un libro conta una volta per ogni sua motivazione.
-  // "unspecified" conta solo se è l'unica motivazione del libro.
-  counts = {};
-  for (let bookReasons of bookReasonsById.values()) {
-    if (bookReasons.size > 1) bookReasons.delete("unspecified");
-    for (let reason of bookReasons) counts[reason] = (counts[reason] || 0) + 1;
-  }
-
-  shelves = Object.keys(reasoncategories).map((k) => ({
-    key: k,
-    label: reasoncategories[k],
-    count: counts[k] || 0
-  }));
-}
-
-function buildLibreriaStati(){
-  let booksByState = new Map(); // stato -> insieme di book_id
-  for (let r of rows) {
-    if (r.year > annoSelezionato) continue; //linea del tempo: solo fino all'anno scelto
-    if (r.state === "") continue;
-    if (!booksByState.has(r.state)) booksByState.set(r.state, new Set());
-    booksByState.get(r.state).add(r.id);
-  }
-  let countOf = (code) => (booksByState.has(code) ? booksByState.get(code).size : 0);
-
-  // tutti i 50 stati, anche senza dati e quindi con scaffali vuoti, sono messi in ordine alfabetico
-  shelves = Object.keys(state_names).map((code) => ({
-    key: code,
-    label: state_names[code],
-    count: countOf(code)
-  }));
-  shelves.sort((a, b) => a.label.localeCompare(b.label)); //ordine alfabetico
-
-  // Federal è la prima categoria sopra gli stati
-  shelves.unshift({ key: "Federal", label: "FEDERAL", count: countOf("Federal") });
-}
-
 function draw() {
   background(green2);
   textSize(labelSize);
@@ -156,7 +113,20 @@ function draw() {
   hoveredId = null; //azzera l'hover
 
   drawIntestazione();
-  drawLibreria();
+
+  //controllo filtro
+  if(ordina === "MOTIVAZIONE"){
+    drawLibreriaMotivazioni();
+  } else {
+    if(ordina === "CONTESTO"){
+      drawLibreriaContesto();
+    } else {
+      if(ordina === "STATO AMERICANO") {
+        drawLibreriaStati();
+        }
+      }
+  }
+  
   drawTimeline(); 
 
   cursor(hoveredId !== null ? HAND : ARROW); //compare la mano quando puoi cliccare
@@ -168,8 +138,6 @@ function windowResized() {
 }
 
 function drawIntestazione() {
-  let activeSort = "MOTIVAZIONE"; //pulsante attivo
-
   let headerHeight = 100;
   let midY = margin+10;
 
@@ -261,7 +229,7 @@ function drawIntestazione() {
     bx -= w;
     sortButtons.push({ label: buttons[i], x: bx, y: midY + 48 - bHeight / 2, w: w, h: bHeight });
 
-    let isActive = buttons[i] === activeSort;
+    let isActive = buttons[i] === ordina;
     if (isActive) {
       fill(green1);
       stroke(255);
@@ -290,7 +258,43 @@ function drawIntestazione() {
   pop();
 }
 
-function drawLibreria() {
+
+// --- FILTRO ORDINA PER ---
+
+function buildScaffali(){
+  shelfScroll = {};
+  labelZone = null;
+}
+
+//motivazioni
+function buildLibreriaMotivazioni(){
+  // book_id -> insieme di tutte le motivazioni di quel libro (su tutte le sue righe)
+  let bookReasonsById = new Map();
+
+  for (let r of rows) {
+    if (r.year > annoSelezionato) continue; //linea del tempo: solo fino all'anno scelto
+    if (r.reasons.length === 0) continue; //i libri senza motivazione non contano
+    if (!bookReasonsById.has(r.id)) bookReasonsById.set(r.id, new Set()); //crea un nuovo set
+    for (let reason of r.reasons) bookReasonsById.get(r.id).add(reason);
+  }
+
+  // Un libro conta una volta per ogni sua motivazione.
+  // "unspecified" conta solo se è l'unica motivazione del libro.
+  counts = {};
+  for (let bookReasons of bookReasonsById.values()) {
+    if (bookReasons.size > 1) bookReasons.delete("unspecified");
+    for (let reason of bookReasons) counts[reason] = (counts[reason] || 0) + 1;
+  }
+
+  shelves = Object.keys(reasoncategories).map((k) => ({
+    key: k,
+    label: reasoncategories[k],
+    count: counts[k] || 0
+  }));
+}
+
+function drawLibreriaMotivazioni() {
+  buildLibreriaMotivazioni();
 
   let n = Object.keys(reasoncategories).length; //numero categorie
 
@@ -356,6 +360,268 @@ function drawLibreria() {
   pop();
 }
 
+//stati
+function buildLibreriaStati(){
+  let booksByState = new Map(); // stato -> insieme di book_id
+  for (let r of rows) {
+    if (r.year > annoSelezionato) continue; //linea del tempo: solo fino all'anno scelto
+    if (r.state === "") continue;
+    if (!booksByState.has(r.state)) booksByState.set(r.state, new Set());
+    booksByState.get(r.state).add(r.id);
+  }
+  let countOf = (code) => (booksByState.has(code) ? booksByState.get(code).size : 0);
+
+  // tutti i 50 stati, anche senza dati e quindi con scaffali vuoti, sono messi in ordine alfabetico
+  shelves = Object.keys(state_names).map((code) => ({
+    key: code,
+    label: state_names[code],
+    count: countOf(code)
+  }));
+  shelves.sort((a, b) => a.label.localeCompare(b.label)); //ordine alfabetico
+
+  // Federal è la prima categoria sopra gli stati
+  shelves.unshift({ key: "Federal", label: "FEDERAL", count: countOf("Federal") });
+}
+
+function drawLibreriaStati() {
+  buildLibreriaStati();
+
+  let n = shelves.length; //numero stati
+
+  //area di tutta libreria
+  let libTop = headerHeight + margin;
+  let libBottom = height - margin;
+  let libHeight = (libBottom - libTop)*5;
+
+  //ogni scaffale = spazio vuoto sopra + libri + tavola
+  let shelfStep = libHeight/n;
+  let spazioVuoto = shelfStep * 0.25; //spazio vuoto sopra i libri
+  let bookHeight = shelfStep - shelfHeight - spazioVuoto;
+
+  let shelfX = margin + shelfHeight; //dove iniziano gli scaffali
+  let shelfRight = width - margin - timeline;  //bordo destro della libreria
+
+  push();
+  //clipping che impedisce alla libreria di coprire l'header scorrendo
+  drawingContext.save(); //salva lo stato del canvas
+  drawingContext.beginPath(); //prepara alla creazione del rettangolo di ritaglio
+  drawingContext.rect(0, headerHeight, width, height - headerHeight); //disegna il rettangolo in cui si troverà la libreria
+  drawingContext.clip(); //converte la forma in maschera di ritaglio
+
+  //scorrimento verticale della libreria
+  translate(0, -scrollY);
+
+  //bordi della libreria
+  stroke(lineColor);
+  fill(green1);
+  rect(margin, libTop, shelfHeight, libHeight); 
+  rect(shelfRight - shelfHeight, libTop, shelfHeight, libHeight);
+  rect(margin + shelfHeight, libTop, shelfRight - shelfHeight - shelfX, shelfHeight);
+
+  //la posizione del mouse si somma allo scroll
+  let scrolledMouseY = mouseY + scrollY;
+
+  for (let i = 0; i < n; i++) {
+    let s = shelves[i];
+    let key = s.key;
+    let rowTop = libTop + i * shelfStep;
+    let shelfY = rowTop + shelfStep - shelfHeight; //la tavola sta in fondo alla riga
+    let bookY = shelfY - bookHeight; //i libri poggiano sulla tavola
+
+    let hover =
+      mouseX > shelfX && mouseX < shelfRight &&
+      scrolledMouseY > rowTop && scrolledMouseY < rowTop + shelfStep;
+
+    if (hover) {
+      let topOffset = (i === 0) ? shelfHeight : 0; //nel primo scaffale non parte da rowTop ma aggiunge shelfHeight
+      noStroke();
+      fill(greenHover);
+      rect(shelfX, rowTop + topOffset, shelfRight - shelfX - shelfHeight, shelfStep - topOffset);
+      hoveredId = key;
+    }
+
+    //tavola
+    stroke(lineColor);
+    fill(green1);
+    rect(shelfX, shelfY, shelfRight - shelfHeight - shelfX, shelfHeight);
+
+    // nome dello stato
+    noStroke();
+    fill(255);
+    textStyle(BOLD);
+    textSize(15);
+    textAlign(RIGHT, BASELINE);
+    text(s.label, shelfRight - shelfHeight - 10, shelfY);
+
+    // libri
+    fill(255);
+    for (let g = 0; g < ceil(s.count / GLIFO_VALE); g++) {
+      rect(shelfX + g * (bookWidth + bookGap), bookY, bookWidth, bookHeight); //Quanti libri disegnare. Un glifo vale 50 quindi conta il numero di libri diviso 50 e arrotondato per eccesso. Se ci sono 0 libri, ceil(0) = 0 quindi non disegna nulla. Se ci sono 1-50 libri, ceil(1/50) = 1 quindi disegna un libro
+    }
+  }
+  pop();
+}
+
+
+// --- TIMELINE ---
+
+function drawTimeline() {
+  let top = headerHeight + margin;
+  let bottom = height - margin;
+
+  tlR = (bottom - top) * 0.4;           //raggio: più è grande, meno è curva
+  xAnello = width - margin - 50;        //l'anello sta vicino al bordo destro
+  tlCx = xAnello + tlR;                 //il centro del cerchio è fuori dallo schermo
+  tlCy = top + (bottom - top) * 0.7;    //altezza dell'anello (0.5 = a metà)
+
+  //la rotella si avvicina piano piano all'anno scelto (animazione)
+  ruota = lerp(ruota, annoSelezionato, 0.15);
+
+  push();
+  //cerchio
+  noFill();
+  stroke(255);
+  strokeWeight(1);
+  circle(tlCx, tlCy, tlR * 2);
+
+  //anni sul cerchio
+  for (let anno = annoInizio; anno <= annoFine; anno++) {
+    if (abs(anno - ruota) < 0.5) continue; //quello davanti all'anello lo scrivo dopo
+
+    let a = annoAngolo(anno);
+    if (abs(a - PI) > HALF_PI) continue;   //troppo lontano: sarebbe fuori dallo schermo
+
+    let x = tlCx + tlR * cos(a);
+    let y = tlCy + tlR * sin(a);
+
+    //pallino
+    noStroke();
+    fill(255);
+    circle(x, y, 7);
+
+    //anno a sinistra del pallino
+    fill(180);
+    textStyle(NORMAL);
+    textSize(12);
+    textAlign(RIGHT, CENTER);
+    text(anno, x - 12, y);
+  }
+
+  //anello fermo (riempito col colore di sfondo, così il cerchio non ci passa dentro)
+  stroke(255);
+  strokeWeight(1);
+  fill(green2);
+  circle(xAnello, tlCy, 18);
+
+  //anno scelto a sinistra dell'anello
+  noStroke();
+  fill(255);
+  textStyle(BOLD);
+  textSize(15);
+  textAlign(RIGHT, CENTER);
+  text(annoSelezionato, xAnello - 20, tlCy);
+  pop();
+}
+
+//anno -> angolo sul cerchio
+//l'anno davanti all'anello sta a PI (a sinistra del centro), quelli dopo scendono, quelli prima salgono
+function annoAngolo(anno) {
+  return PI - (anno - ruota) * passo;
+}
+
+//restituisce l'anno sotto il mouse (pallino o scritta), oppure null
+function annoSottoMouse() {
+  for (let anno = annoInizio; anno <= annoFine; anno++) {
+    let a = annoAngolo(anno);
+    if (abs(a - PI) > HALF_PI) continue;
+
+    let x = tlCx + tlR * cos(a);
+    let y = tlCy + tlR * sin(a);
+    if (mouseX > x - 50 && mouseX < x + 10 && abs(mouseY - y) < 10) return anno;
+  }
+  return null;
+}
+
+//true se il mouse è sopra un anno (usata da sketch.js per la manina e il click)
+function sopraTimeline() {
+  return annoSottoMouse() !== null;
+}
+
+//click su un anno: diventa quello scelto e la rotella gira fino a portarlo all'anello
+function updateTimeline() {
+  let anno = annoSottoMouse();
+  if (anno !== null && anno !== annoSelezionato) {
+    annoSelezionato = anno;
+    buildScaffali(); //ricalcola i conteggi solo quando l'anno cambia
+  }
+}
+
+//true se il mouse è nella colonna della linea del tempo (per la rotellina)
+function vicinoRuota() {
+  return mouseX > width - margin - timeline && mouseY > headerHeight;
+}
+
+//rotellina: giù = anno dopo, su = anno prima
+function scrollTimeline(delta) {
+  scrollAccumulo += delta;
+  if (abs(scrollAccumulo) < 60) return; //i trackpad mandano tanti scatti piccoli: ne sommo un po' prima di cambiare anno
+
+  let anno = constrain(annoSelezionato + (scrollAccumulo > 0 ? 1 : -1), annoInizio, annoFine);
+  scrollAccumulo = 0;
+  if (anno !== annoSelezionato) {
+    annoSelezionato = anno;
+    buildScaffali();
+  }
+}
+
+function mousePressed() {
+  //timeline
+  if (sopraTimeline()) {
+    updateTimeline();
+    return;
+  }
+
+  //click ordina per
+  for (let b of sortButtons) {
+    if (mouseX > b.x && mouseX < b.x + b.w && mouseY > b.y && mouseY < b.y + b.h) {
+      scrollY = 0;
+      ordina = b.label; //"MOTIVAZIONE" oppure "STATO AMERICANO"
+      buildScaffali(); //azzera gli scorrimenti
+      return; //il clic è sul pulsante: non passare agli scaffali
+    }
+  }
+
+  //se il click avviene fuori dalla libreria, esci
+  if (mouseY < headerHeight + margin) return;
+
+  //click sullo scaffale
+  if (hoveredId === null) {
+    return; // se si clicca fuori dagli scaffali non succede nulla
+  }
+
+  //nuovo URL
+  let newURL = `scaffale.html?reason=${encodeURIComponent(hoveredId)}`;
+  console.log(newURL);
+  window.location.href = newURL;
+}
+
+function mouseWheel(event) {
+  //se il mouse si trova nella zona della timeline, scorre la timeline
+  if (mouseX > width-timeline) {
+    scrollTimeline(event.delta);
+  } else {
+    //altrimenti scorre la libreria verticale
+    let libTop = headerHeight + margin;
+    let libBottom = height - margin;
+    let libHeight = (libBottom - libTop) *5; // Stessa altezza stimata usata in drawLibreriaStati
+    let maxScroll = max(0, libHeight - (height - libTop - margin));
+
+    scrollY += event.delta * 0.5; // Regola la velocità di scorrimento (es. moltiplicatore 0.5)
+    scrollY = constrain(scrollY, 0, maxScroll);
+  }
+  return false; //la pagina non scorre
+}
+
 // Legge da style.css  
 function loadStyle() {
   let css = getComputedStyle(document.documentElement);
@@ -375,26 +641,4 @@ function loadStyle() {
   bookWidth = number('--libro-larghezza');
   bookGap = number('--libro-spazio');
   shelfHeight = number('--tavola-spessore');
-}
-
-function mousePressed() {
-
-  if (sopraTimeline()) {
-    updateTimeline();
-    return;
-  }
-
-  if (hoveredId === null) return; // se si clicca fuori dagli scaffali non succede nulla
-
-  //nuovo URL
-  let newURL = `scaffale.html?reason=${encodeURIComponent(hoveredId)}`;
-
-  console.log(newURL);
-
-  window.location.href = newURL;
-}
-
-function mouseWheel(event) {
-  scrollTimeline(event.delta);
-  return false; //la pagina non scorre
 }
